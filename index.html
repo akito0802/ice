@@ -1,12 +1,245 @@
 <!doctype html>
 <html lang="ja">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>冷蔵庫ストック管理（シンプル）</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>冷蔵庫ストック（超ミニ）</title>
+  <style>
+    :root{--bg:#0b1020;--card:#121a2e;--acc:#55e0ff;--txt:#e6f2ff;--mut:#9aaccc}
+    *{box-sizing:border-box} body{margin:0;background:linear-gradient(180deg,var(--bg),#0f1831);color:var(--txt);font-family:system-ui,-apple-system,Segoe UI,Roboto,Noto Sans JP,Arial}
+    .wrap{max-width:900px;margin:0 auto;padding:16px}
+    .card{background:var(--card);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:14px;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+    .row{display:flex;gap:10px;flex-wrap:wrap} .col{flex:1 1 260px;min-width:240px}
+    h1{font-size:24px;margin:0 0 8px} h2{font-size:18px;margin:10px 0}
+    label{display:block;font-size:12px;color:var(--mut);margin:8px 0 4px}
+    input,select,textarea{width:100%;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:#0e1530;color:var(--txt)}
+    input[type="date"]{color-scheme:dark} button{cursor:pointer;border:none;border-radius:10px;padding:10px 12px;font-weight:700}
+    .btn{background:var(--acc);color:#04121a} .btn.s{background:#1e2a4d;color:var(--txt)}
+    .badge{display:inline-block;padding:3px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.14);font-size:12px;color:var(--mut)}
+    .item{display:flex;align-items:center;justify-content:space-between;border-bottom:1px dashed rgba(255,255,255,.08);padding:8px 0}
+    .item:last-child{border-bottom:none} .mut{color:var(--mut);font-size:12px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card" id="gate" style="text-align:center">
+      <h1>冷蔵庫ストック（超ミニ）</h1>
+      <p class="mut">Googleでログインしてはじめよう</p>
+      <button class="btn" id="login">Googleでログイン</button>
+    </div>
+
+    <div id="app" style="display:none">
+      <div class="row" style="align-items:center;margin-bottom:8px">
+        <div class="col"><h1>冷蔵庫ストック</h1><div class="mut" id="welcome"></div></div>
+        <div class="col" style="text-align:right"><button class="btn s" id="logout">ログアウト</button></div>
+      </div>
+
+      <div class="card">
+        <div class="row" style="align-items:end">
+          <div class="col">
+            <label>検索</label>
+            <input id="q" placeholder="名前で検索…">
+          </div>
+          <div class="col">
+            <label>カテゴリ</label>
+            <select id="cat">
+              <option>すべて</option>
+              <option>調味料</option><option>野菜</option><option>肉・魚</option><option>乳製品</option>
+              <option>飲料</option><option>加工品</option><option>冷凍</option><option>おやつ</option><option>その他</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <h2>追加 / 編集</h2>
+        <div class="row">
+          <div class="col"><label>名前</label><input id="name" required></div>
+          <div class="col"><label>カテゴリ</label>
+            <select id="category">
+              <option>調味料</option><option>野菜</option><option>肉・魚</option><option>乳製品</option>
+              <option>飲料</option><option>加工品</option><option>冷凍</option><option>おやつ</option><option selected>その他</option>
+            </select>
+          </div>
+          <div class="col"><label>数量</label><input id="qty" type="number" min="0" value="1"></div>
+          <div class="col"><label>単位</label>
+            <select id="unit">
+              <option>個</option><option>本</option><option>袋</option><option>g</option><option>kg</option><option>ml</option><option>L</option><option>パック</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <div class="col"><label>期限</label><input id="expiry" type="date"></div>
+          <div class="col"><label>メモ</label><input id="notes" placeholder="上段(右) など"></div>
+          <div class="col" style="display:flex;gap:8px;align-items:end">
+            <button class="btn" id="save">保存</button>
+            <button class="btn s" id="cancel" style="display:none">キャンセル</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <h2>在庫</h2>
+        <div id="list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase SDK (ESM) -->
+  <script type="module">
+    import { firebaseConfig } from './config.js'
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js'
+    import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-auth.js'
+    import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore.js'
+
+    // --- init
+    const app = initializeApp(firebaseConfig)
+    const auth = getAuth(app)
+    const db = getFirestore(app)
+    const provider = new GoogleAuthProvider()
+
+    // --- ui refs
+    const gate = document.getElementById('gate')
+    const loginBtn = document.getElementById('login')
+    const appEl = document.getElementById('app')
+    const welcome = document.getElementById('welcome')
+    const logoutBtn = document.getElementById('logout')
+    const qEl = document.getElementById('q')
+    const catEl = document.getElementById('cat')
+    const listEl = document.getElementById('list')
+    const nameEl = document.getElementById('name')
+    const categoryEl = document.getElementById('category')
+    const qtyEl = document.getElementById('qty')
+    const unitEl = document.getElementById('unit')
+    const expiryEl = document.getElementById('expiry')
+    const notesEl = document.getElementById('notes')
+    const saveBtn = document.getElementById('save')
+    const cancelBtn = document.getElementById('cancel')
+
+    let uid = null
+    let editingId = null
+    let allItems = []
+    let unsub = null
+
+    loginBtn.onclick = () => signInWithPopup(auth, provider)
+    logoutBtn.onclick = () => signOut(auth)
+
+    onAuthStateChanged(auth, user => {
+      if (user){
+        uid = user.uid
+        welcome.textContent = `ようこそ ${user.displayName || 'ユーザー'} さん`
+        gate.style.display = 'none'
+        appEl.style.display = 'block'
+        subscribe()
+      }else{
+        uid = null
+        if (unsub){ unsub(); unsub = null }
+        appEl.style.display = 'none'
+        gate.style.display = 'block'
+      }
+    })
+
+    function subscribe(){
+      const col = collection(db, 'users', uid, 'items')
+      const qq = query(col, orderBy('category'), orderBy('name'))
+      unsub = onSnapshot(qq, snap => {
+        allItems = snap.docs.map(d => ({ id:d.id, ...d.data() }))
+        render()
+      })
+    }
+
+    function render(){
+      const q = (qEl.value || '').toLowerCase()
+      const cat = catEl.value || 'すべて'
+      const items = allItems.filter(it => (cat==='すべて' || it.category===cat) && (it.name||'').toLowerCase().includes(q))
+
+      listEl.innerHTML = ''
+      for (const it of items){
+        const wrap = document.createElement('div')
+        wrap.className = 'item'
+
+        const left = document.createElement('div')
+        const title = document.createElement('div'); title.style.fontWeight='700'; title.textContent = it.name
+        const sub = document.createElement('div'); sub.className='mut'; sub.innerHTML = `${it.quantity||0}${it.unit||''}・${expiryBadge(it.expiry)}` + (it.notes? `・メモ:${it.notes}`:'')
+        left.appendChild(title); left.appendChild(sub)
+
+        const right = document.createElement('div'); right.style.display='flex'; right.style.gap='6px'
+        const bDec = btn('－', 's', ()=>updateQty(it, -1))
+        const bInc = btn('＋', 's', ()=>updateQty(it, +1))
+        const bEdit = btn('編集', 's', ()=>loadEdit(it))
+        const bDel = btn('削除', '', ()=>del(it))
+        right.append(bDec,bInc,bEdit,bDel)
+
+        wrap.append(left,right)
+        listEl.appendChild(wrap)
+      }
+    }
+
+    function expiryBadge(dateStr){
+      if (!dateStr) return '<span class="badge">期限未設定</span>'
+      const today = new Date(); today.setHours(0,0,0,0)
+      const d = new Date(dateStr + 'T00:00:00')
+      const diff = Math.ceil((d - today)/86400000)
+      const ymd = `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`
+      const color = diff<0 ? 'style="color:#ff6b6b"' : diff<=3 ? 'style="color:#ffb703"' : ''
+      return `<span class="badge" ${color}>${ymd}（${diff>=0?`あと${diff}日`:`${-diff}日前`}）</span>`
+    }
+
+    function btn(label, kind, onClick){
+      const b = document.createElement('button'); b.className = 'btn' + (kind?' '+kind:''); b.textContent = label; b.onclick = onClick; return b
+    }
+
+    async function updateQty(it, delta){
+      const ref = doc(db, 'users', uid, 'items', it.id)
+      const next = Math.max(0, (it.quantity||0) + delta)
+      await updateDoc(ref, { quantity: next })
+    }
+
+    function loadEdit(it){
+      editingId = it.id
+      nameEl.value = it.name || ''
+      categoryEl.value = it.category || 'その他'
+      qtyEl.value = it.quantity || 0
+      unitEl.value = it.unit || '個'
+      expiryEl.value = it.expiry || ''
+      notesEl.value = it.notes || ''
+      cancelBtn.style.display = 'inline-block'
+      saveBtn.textContent = '更新'
+    }
+
+    cancelBtn.onclick = ()=>{
+      editingId = null
+      nameEl.value = ''; categoryEl.value='その他'; qtyEl.value=1; unitEl.value='個'; expiryEl.value=''; notesEl.value=''
+      cancelBtn.style.display = 'none'
+      saveBtn.textContent = '保存'
+    }
+
+    saveBtn.onclick = async ()=>{
+      const payload = {
+        name: nameEl.value.trim(),
+        category: categoryEl.value,
+        quantity: Number(qtyEl.value||0),
+        unit: unitEl.value,
+        expiry: expiryEl.value,
+        notes: notesEl.value.trim(),
+        updatedAt: serverTimestamp()
+      }
+      if (!payload.name){ alert('名前を入れてね'); return }
+      if (editingId){
+        await updateDoc(doc(db, 'users', uid, 'items', editingId), payload)
+      }else{
+        await addDoc(collection(db, 'users', uid, 'items'), { ...payload, createdAt: serverTimestamp() })
+      }
+      cancelBtn.onclick()
+    }
+
+    async function del(it){
+      if (!confirm(`「${it.name}」を削除しますか？`)) return
+      await deleteDoc(doc(db, 'users', uid, 'items', it.id))
+    }
+
+    // re-render on search/category change
+    qEl.oninput = render; catEl.onchange = render
+  </script>
+</body>
 </html>

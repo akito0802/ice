@@ -1,47 +1,23 @@
-# 冷蔵庫ストック管理（シンプル版 / Firestoreのみ）
+# 冷蔵庫ストック（超ミニ）
 
-## できること
-- Googleログイン
-- アイテムの追加・編集・削除（カテゴリ、数量、単位、期限、メモ）
-- カテゴリごとに一覧表示、検索、数量の＋/−
-- 個人ごとの Firestore コレクションに保存
-- 上に一気に戻るボタン
+**ファイル3つだけ**でGitHub Pagesに置ける、ビルド不要の超軽量版。  
+- `index.html` … UIとロジック全部入り（CDNのFirebase SDKを使用）
+- `config.js` … Firebaseの設定を書く
+- `README.md` … これ
 
-## セットアップ手順
-1. 依存関係をインストール：
-   ```bash
-   npm install
-   ```
-2. Firebase で Web アプリを作成し、`.env` を作る：
-   ```env
-   VITE_FIREBASE_API_KEY=xxxxx
-   VITE_FIREBASE_AUTH_DOMAIN=xxxxx.firebaseapp.com
-   VITE_FIREBASE_PROJECT_ID=xxxxx
-   VITE_FIREBASE_APP_ID=1:xxxxx:web:xxxxx
-   ```
-3. 開発起動：
-   ```bash
-   npm run dev
-   ```
-4. Firestoreルール反映（任意／CLI必要）
-   ```bash
-   firebase deploy --only firestore:rules
-   ```
+## 使い方
+1. Firebaseコンソールでプロジェクト作成 → Authenticationで「Google」を有効化 → Firestoreを有効化。
+2. FirebaseでWebアプリを追加して出てくる設定値を `config.js` にコピペ。
+3. この3ファイルをGitHub Pagesの公開リポに置いて終了。
 
-## データ構造
-`users/{uid}/items/{itemId}`
-```json
-{
-  "name": "卵",
-  "category": "乳製品",
-  "quantity": 10,
-  "unit": "個",
-  "expiry": "2025-08-31",
-  "notes": "上段(右)",
-  "createdAt": "...",
-  "updatedAt": "..."
+## Firestore ルール（推奨）
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId}/items/{itemId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
 }
 ```
-
-## メモ
-- Storage を使わないため、セットアップは Firestore のみで完結します。
