@@ -5,8 +5,3 @@ export const firebaseConfig = {
   projectId: "YOUR_PROJECT_ID",
   appId: "YOUR_APP_ID"
 }
-// 例）
-// apiKey: "AIza...",
-// authDomain: "myapp.firebaseapp.com",
-// projectId: "myapp",
-// appId: "1:1234567890:web:abcdef"

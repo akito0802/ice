@@ -18,17 +18,20 @@
     .badge{display:inline-block;padding:3px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.14);font-size:12px;color:var(--mut)}
     .item{display:flex;align-items:center;justify-content:space-between;border-bottom:1px dashed rgba(255,255,255,.08);padding:8px 0}
     .item:last-child{border-bottom:none} .mut{color:var(--mut);font-size:12px}
+    .hidden{display:none}
   </style>
 </head>
 <body>
   <div class="wrap">
+    <!-- Login Gate -->
     <div class="card" id="gate" style="text-align:center">
       <h1>冷蔵庫ストック（超ミニ）</h1>
       <p class="mut">Googleでログインしてはじめよう</p>
       <button class="btn" id="login">Googleでログイン</button>
     </div>
 
-    <div id="app" style="display:none">
+    <!-- App -->
+    <div id="app" class="hidden">
       <div class="row" style="align-items:center;margin-bottom:8px">
         <div class="col"><h1>冷蔵庫ストック</h1><div class="mut" id="welcome"></div></div>
         <div class="col" style="text-align:right"><button class="btn s" id="logout">ログアウト</button></div>
@@ -48,13 +51,17 @@
               <option>飲料</option><option>加工品</option><option>冷凍</option><option>おやつ</option><option>その他</option>
             </select>
           </div>
+          <div class="col" style="text-align:right">
+            <button class="btn" id="toggleForm">＋ 追加フォーム</button>
+          </div>
         </div>
       </div>
 
-      <div class="card" style="margin-top:12px">
-        <h2>追加 / 編集</h2>
+      <!-- Input Form (toggle) -->
+      <div class="card hidden" id="formCard" style="margin-top:12px">
+        <h2 id="formTitle">アイテムを追加</h2>
         <div class="row">
-          <div class="col"><label>名前</label><input id="name" required></div>
+          <div class="col"><label>名前 <span class="mut">（必須）</span></label><input id="name" required placeholder="例：卵 / しょうゆ"></div>
           <div class="col"><label>カテゴリ</label>
             <select id="category">
               <option>調味料</option><option>野菜</option><option>肉・魚</option><option>乳製品</option>
@@ -71,9 +78,9 @@
         <div class="row">
           <div class="col"><label>期限</label><input id="expiry" type="date"></div>
           <div class="col"><label>メモ</label><input id="notes" placeholder="上段(右) など"></div>
-          <div class="col" style="display:flex;gap:8px;align-items:end">
+          <div class="col" style="display:flex;gap:8px;align-items:end;justify-content:flex-end">
             <button class="btn" id="save">保存</button>
-            <button class="btn s" id="cancel" style="display:none">キャンセル</button>
+            <button class="btn s hidden" id="cancel">キャンセル</button>
           </div>
         </div>
       </div>
@@ -107,6 +114,9 @@
     const qEl = document.getElementById('q')
     const catEl = document.getElementById('cat')
     const listEl = document.getElementById('list')
+    const toggleFormBtn = document.getElementById('toggleForm')
+    const formCard = document.getElementById('formCard')
+    const formTitle = document.getElementById('formTitle')
     const nameEl = document.getElementById('name')
     const categoryEl = document.getElementById('category')
     const qtyEl = document.getElementById('qty')
@@ -121,21 +131,22 @@
     let allItems = []
     let unsub = null
 
-    loginBtn.onclick = () => signInWithPopup(auth, provider)
+    loginBtn.onclick = () =>
+      signInWithPopup(auth, provider).catch(err => alert("Login error: " + err.message))
     logoutBtn.onclick = () => signOut(auth)
 
     onAuthStateChanged(auth, user => {
       if (user){
         uid = user.uid
         welcome.textContent = `ようこそ ${user.displayName || 'ユーザー'} さん`
-        gate.style.display = 'none'
-        appEl.style.display = 'block'
+        gate.classList.add('hidden')
+        appEl.classList.remove('hidden')
         subscribe()
       }else{
         uid = null
         if (unsub){ unsub(); unsub = null }
-        appEl.style.display = 'none'
-        gate.style.display = 'block'
+        appEl.classList.add('hidden')
+        gate.classList.remove('hidden')
       }
     })
 
@@ -195,25 +206,39 @@
       await updateDoc(ref, { quantity: next })
     }
 
+    // toggle form open/close
+    toggleFormBtn.onclick = () => {
+      const open = formCard.classList.contains('hidden')
+      formCard.classList.toggle('hidden')
+      if (open) nameEl.focus()
+    }
+
+    // load edit
     function loadEdit(it){
       editingId = it.id
+      formTitle.textContent = 'アイテムを編集'
       nameEl.value = it.name || ''
       categoryEl.value = it.category || 'その他'
       qtyEl.value = it.quantity || 0
       unitEl.value = it.unit || '個'
       expiryEl.value = it.expiry || ''
       notesEl.value = it.notes || ''
-      cancelBtn.style.display = 'inline-block'
+      cancelBtn.classList.remove('hidden')
+      if (formCard.classList.contains('hidden')) formCard.classList.remove('hidden')
+      nameEl.focus()
       saveBtn.textContent = '更新'
     }
 
+    // cancel edit
     cancelBtn.onclick = ()=>{
       editingId = null
+      formTitle.textContent = 'アイテムを追加'
       nameEl.value = ''; categoryEl.value='その他'; qtyEl.value=1; unitEl.value='個'; expiryEl.value=''; notesEl.value=''
-      cancelBtn.style.display = 'none'
+      cancelBtn.classList.add('hidden')
       saveBtn.textContent = '保存'
     }
 
+    // save
     saveBtn.onclick = async ()=>{
       const payload = {
         name: nameEl.value.trim(),
@@ -224,15 +249,20 @@
         notes: notesEl.value.trim(),
         updatedAt: serverTimestamp()
       }
-      if (!payload.name){ alert('名前を入れてね'); return }
+      if (!payload.name){ alert('名前を入れてね'); nameEl.focus(); return }
       if (editingId){
         await updateDoc(doc(db, 'users', uid, 'items', editingId), payload)
       }else{
         await addDoc(collection(db, 'users', uid, 'items'), { ...payload, createdAt: serverTimestamp() })
       }
       cancelBtn.onclick()
+      if (formCard.classList.contains('hidden') === false){
+        // keep it open for rapid input? If you want to auto-close, uncomment next line.
+        // formCard.classList.add('hidden')
+      }
     }
 
+    // delete
     async function del(it){
       if (!confirm(`「${it.name}」を削除しますか？`)) return
       await deleteDoc(doc(db, 'users', uid, 'items', it.id))
